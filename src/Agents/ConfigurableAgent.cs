@@ -102,30 +102,10 @@ public sealed partial class ConfigurableAgent : AIAgent, IHasAdditionalPropertie
 
     RuntimeState Configure(IConfigurationSection configSection)
     {
-        var configuredOptions = configSection.Get<ConfigurableAgentOptions>() ?? new ConfigurableAgentOptions();
-        configuredOptions.Name ??= name;
-        configuredOptions.Description = configuredOptions.Description?.Dedent();
-        configuredOptions.Instructions = configuredOptions.Instructions?.Dedent();
-
-        var properties = configSection.Get<AdditionalPropertiesDictionary>();
-        if (properties is not null)
-        {
-            properties.Remove(nameof(ConfigurableAgentOptions.Name));
-            properties.Remove(nameof(ConfigurableAgentOptions.Description));
-            properties.Remove(nameof(ConfigurableAgentOptions.Instructions));
-            properties.Remove(nameof(ConfigurableAgentOptions.Client));
-            properties.Remove(nameof(ConfigurableAgentOptions.Model));
-            properties.Remove(nameof(ConfigurableAgentOptions.Use));
-            properties.Remove(nameof(ConfigurableAgentOptions.Tools));
-            properties.Remove(nameof(ConfigurableAgentOptions.UseProvidedChatClientAsIs));
-            properties.Remove(nameof(ConfigurableAgentOptions.ClearOnChatHistoryProviderConflict));
-            properties.Remove(nameof(ConfigurableAgentOptions.WarnOnChatHistoryProviderConflict));
-            properties.Remove(nameof(ConfigurableAgentOptions.ThrowOnChatHistoryProviderConflict));
-            AdditionalProperties = properties;
-        }
-
         if (configuration[$"{section}:name"] is { } newName && !string.Equals(newName, name, StringComparison.Ordinal))
             throw new InvalidOperationException($"The name of a configured agent cannot be changed at runtime. Expected '{name}' but was '{newName}'.");
+
+        var configuredOptions = configSection.Get<ConfigurableAgentOptions>() ?? new();
 
         var chatClientKey = configuredOptions.Client
             ?? throw new InvalidOperationException($"A client must be specified for agent '{name}' in configuration section '{section}'.");
@@ -134,16 +114,9 @@ public sealed partial class ConfigurableAgent : AIAgent, IHasAdditionalPropertie
             ?? services.GetKeyedService<IChatClient>(new ServiceKey(chatClientKey))
             ?? throw new InvalidOperationException($"Specified chat client '{chatClientKey}' for agent '{name}' is not registered.");
 
-        var runtimeOptions = new ChatClientAgentOptions
-        {
-            Name = configuredOptions.Name,
-            Description = configuredOptions.Description,
-            UseProvidedChatClientAsIs = configuredOptions.UseProvidedChatClientAsIs,
-            ClearOnChatHistoryProviderConflict = configuredOptions.ClearOnChatHistoryProviderConflict,
-            WarnOnChatHistoryProviderConflict = configuredOptions.WarnOnChatHistoryProviderConflict,
-            ThrowOnChatHistoryProviderConflict = configuredOptions.ThrowOnChatHistoryProviderConflict,
-            ChatOptions = configSection.GetSection("options").Get<ChatOptions>()
-        };
+        var runtimeOptions = configSection.Get<ChatClientAgentOptions>() ?? new();
+        runtimeOptions.Description = runtimeOptions.Description?.Dedent();
+        runtimeOptions.ChatOptions ??= configSection.GetSection("options").Get<ChatOptions>();
 
         var providerName = client.GetService<ChatClientMetadata>()?.ProviderName;
 
@@ -151,7 +124,7 @@ public sealed partial class ConfigurableAgent : AIAgent, IHasAdditionalPropertie
             (runtimeOptions.ChatOptions ??= new()).ModelId = configuredOptions.Model;
 
         if (!string.IsNullOrWhiteSpace(configuredOptions.Instructions))
-            (runtimeOptions.ChatOptions ??= new()).Instructions = configuredOptions.Instructions;
+            (runtimeOptions.ChatOptions ??= new()).Instructions = configuredOptions.Instructions.Dedent();
 
         var providers = ResolveAIContextProviders(configSection, configuredOptions);
         if (providers.Count > 0)
@@ -161,8 +134,17 @@ public sealed partial class ConfigurableAgent : AIAgent, IHasAdditionalPropertie
             services.GetKeyedService<ChatHistoryProvider>(name) ??
             services.GetService<ChatHistoryProvider>();
 
-        configure?.Invoke(name, runtimeOptions);
+        var properties = configSection.Get<AdditionalPropertiesDictionary>();
+        if (properties is not null)
+        {
+            foreach (var name in NameOf.ChatClientAgentOptions)
+            {
+                properties.Remove(name);
+            }
+            AdditionalProperties = properties;
+        }
 
+        configure?.Invoke(name, runtimeOptions);
         LogConfigured(name);
 
         var agent = new ChatClientAgent(client, runtimeOptions, services.GetService<ILoggerFactory>(), services);
@@ -282,19 +264,11 @@ public sealed partial class ConfigurableAgent : AIAgent, IHasAdditionalPropertie
 
     internal sealed class ConfigurableAgentOptions
     {
-        public string? Name { get; set; }
-        public string? Description { get; set; }
-        //[JsonIgnore]
         public string? Instructions { get; set; }
         public string? Client { get; set; }
-        //[JsonIgnore]
         public string? Model { get; set; }
         public IList<string>? Use { get; set; }
         public IList<string>? Tools { get; set; }
-        public bool UseProvidedChatClientAsIs { get; set; }
-        public bool ClearOnChatHistoryProviderConflict { get; set; }
-        public bool WarnOnChatHistoryProviderConflict { get; set; }
-        public bool ThrowOnChatHistoryProviderConflict { get; set; }
     }
 
     [JsonSourceGenerationOptions(JsonSerializerDefaults.General,

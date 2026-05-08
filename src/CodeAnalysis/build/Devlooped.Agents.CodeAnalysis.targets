@@ -1,0 +1,9 @@
+<Project>
+
+  <Target Name="CollectNameOfItems" BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun">
+    <PropertyGroup>
+      <NameOf_Types>@(NameOf, '|')</NameOf_Types>
+    </PropertyGroup>
+  </Target>
+
+</Project>
