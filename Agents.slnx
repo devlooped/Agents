@@ -9,5 +9,6 @@
     <Project Path="sample/Server/Server.csproj" Id="34619937-085f-453d-bc12-9ab2d4abccb7" />
   </Folder>
   <Project Path="src/Agents/Agents.csproj" Id="90827430-b415-47d6-aac9-2dbe4911b348" />
+  <Project Path="src/CodeAnalysis/CodeAnalysis.csproj" Id="412c0d33-078c-4c44-a90b-08f7dce54aed" />
   <Project Path="src/Tests/Tests.csproj" />
 </Solution>
